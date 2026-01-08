@@ -9,15 +9,15 @@ from app.schemas.types import EventType
 from app.db.systemconfig_oper import SystemConfigOper
 
 
-class nullbr_search(_PluginBase):
+class nullbr_search_lite(_PluginBase):
     # 插件基本信息
-    plugin_name = "Nullbr资源搜索"
-    plugin_desc = "支持nullbr api接口直接搜索影视资源。支持115网盘、磁力、ed2k、m3u8等多种资源类型。）"
+    plugin_name = "Nullbr资源搜索 (Lite)"
+    plugin_desc = "支持nullbr api接口直接搜索影视资源（精简版，移除CMS转存功能）。"
     plugin_icon = "https://raw.githubusercontent.com/Hqyel/MoviePilot-Plugins/main/icons/nullbr.png"
     plugin_version = "2.0.1"
     plugin_author = "Hqyel"
     author_url = "https://github.com/Hqyel"
-    plugin_config_prefix = "nullbr_search_"
+    plugin_config_prefix = "nullbr_search_lite_"
     plugin_order = 1
     auth_level = 1
 
@@ -1087,4 +1087,4 @@ class nullbr_search(_PluginBase):
 
 
 # 导出插件类
-__all__ = ['nullbr_search']
+__all__ = ['nullbr_search_lite']
