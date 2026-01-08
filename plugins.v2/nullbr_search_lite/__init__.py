@@ -16,7 +16,7 @@ class nullbr_search_lite(_PluginBase):
     plugin_icon = "https://raw.githubusercontent.com/Hqyel/MoviePilot-Plugins/main/icons/nullbr.png"
     plugin_version = "2.0.1"
     plugin_author = "Hqyel"
-    author_url = "https://github.com/Hqyel"
+    author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_lite_"
     plugin_order = 1
     auth_level = 1
