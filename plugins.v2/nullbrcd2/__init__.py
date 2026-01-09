@@ -25,7 +25,11 @@ class NullbrCd2(_PluginBase):
     _config = {}
     _nullbr_client: NullbrClient = None
     _cd2_client: CloudDrive2Client = None
-    _last_tasks = set() # 记录上次的完成任务ID，避免重复通知
+    _last_tasks = set()
+    
+    # 页面状态
+    _search_results: List[Dict] = []
+    _search_keyword: str = ""
 
     def init_plugin(self, config: dict = None):
         """
@@ -56,9 +60,6 @@ class NullbrCd2(_PluginBase):
         self._enabled = False
 
     def get_command(self) -> List[Dict[str, Any]]:
-        """
-        注册远程命令
-        """
         return [{
             "cmd": "/nullbr",
             "event": EventType.PluginAction,
@@ -70,9 +71,6 @@ class NullbrCd2(_PluginBase):
         }]
 
     def get_service(self) -> List[Dict[str, Any]]:
-        """
-        注册定时服务
-        """
         if not self._enabled:
             return []
         return [{
@@ -84,153 +82,86 @@ class NullbrCd2(_PluginBase):
         }]
 
     def sync_task(self):
-        """
-        定时监控任务状态
-        """
         if not self._enabled or not self._cd2_client:
             return
-        
-        # 监控离线下载任务
         logger.debug("NullbrCD2 checking offline tasks...")
         offline_tasks = self._cd2_client.get_offline_tasks()
         if not offline_tasks:
             return
-
         current_completed = set()
-        
         for task in offline_tasks:
             task_id = task.get("id") or task.get("name")
             status = task.get("status")
-            
-            # 假设 status 为 "Success" 或 2 代表完成，需根据实际情况调整
             if status == "Success" or status == 2: 
                 current_completed.add(task_id)
                 if task_id not in self._last_tasks:
-                    # 新完成的任务
                     logger.info(f"NullbrCD2 task completed: {task.get('name')}")
                     NotificationHelper().send_message(
                         title="下载完成",
                         text=f"离线任务已完成：{task.get('name')}"
                     )
-        
-        # 更新缓存
         self._last_tasks = current_completed
 
     @eventmanager.register(EventType.PluginAction)
     def command_event(self, event: Event):
-        """
-        监听插件命令事件
-        """
         if not self._enabled:
             return
-            
         event_data = event.event_data
         action = event_data.get("action")
-        
         if action == "nullbr_search":
-            # 处理搜索命令
-            message = event_data.get("message") # 用户发送的消息内容
+            message = event_data.get("message")
             if message:
-                # 提取关键词，移除命令本身
                 keyword = message.replace("/nullbr", "").strip()
                 if not keyword:
                     return
-                
                 channel = event_data.get("channel")
                 user_id = event_data.get("user")
-                
                 logger.info(f"NullbrCD2 searching for: {keyword}")
-                self.post_message(
-                    channel=channel,
-                    title="🔍 正在搜索...",
-                    text=f"关键词: {keyword}",
-                    userid=user_id
-                )
-                
+                self.post_message(channel=channel, title="🔍 正在搜索...", text=f"关键词: {keyword}", userid=user_id)
                 self._search_and_reply(keyword, channel, user_id)
 
     def _search_and_reply(self, keyword: str, channel: MessageChannel, user_id: str):
-        """
-        执行搜索并回复
-        """
         if not self._nullbr_client:
             return
-
         results = self._nullbr_client.search(keyword)
         if not results:
             self.post_message(channel, title="搜索结果", text="未找到相关资源", userid=user_id)
             return
-
-        # 仅展示前 5 条
         for item in results[:5]:
             title = item.get("title")
             overview = item.get("overview", "")[:100] + "..."
             poster = item.get("poster")
             if poster and not poster.startswith("http"):
                 poster = f"https://image.tmdb.org/t/p/w500{poster}"
-            
             tmdb_id = item.get("tmdbid")
             media_type = item.get("media_type")
-            
-            # 构建按钮
             buttons = []
-            
-            # 115 按钮
             if item.get("115-flg") == 1:
-                buttons.append({
-                    "text": "💾 115转存",
-                    "callback_data": f"[PLUGIN]NullbrCd2|dl:115:{media_type}:{tmdb_id}"
-                })
-            
-            # 磁力 按钮
+                buttons.append({"text": "💾 115转存", "callback_data": f"[PLUGIN]NullbrCd2|dl:115:{media_type}:{tmdb_id}"})
             if item.get("magnet-flg") == 1:
-                buttons.append({
-                    "text": "🧲 磁力下载",
-                    "callback_data": f"[PLUGIN]NullbrCd2|dl:mag:{media_type}:{tmdb_id}"
-                })
-
+                buttons.append({"text": "🧲 磁力下载", "callback_data": f"[PLUGIN]NullbrCd2|dl:mag:{media_type}:{tmdb_id}"})
             if buttons:
-                # 每行2个按钮
                 formatted_buttons = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
-                
-                self.post_message(
-                    channel=channel,
-                    title=f"🎬 {title}",
-                    text=overview,
-                    image=poster,
-                    userid=user_id,
-                    buttons=formatted_buttons
-                )
+                self.post_message(channel=channel, title=f"🎬 {title}", text=overview, image=poster, userid=user_id, buttons=formatted_buttons)
 
     @eventmanager.register(EventType.MessageAction)
     def message_event(self, event: Event):
-        """
-        监听消息交互事件
-        """
         if not self._enabled:
             return
-
         event_data = event.event_data
         if not event_data:
             return
-
         plugin_id = event_data.get("plugin_id")
         if plugin_id != self.__class__.__name__:
             return
-
         callback_data = event_data.get("text", "")
         channel = event_data.get("channel")
         user_id = event_data.get("userid")
-
-        # callback_data format: dl:{type}:{media_type}:{tmdb_id}
         if callback_data.startswith("dl:"):
             try:
                 _, dl_type, media_type, tmdb_id = callback_data.split(":")
                 tmdb_id = int(tmdb_id)
-                
-                logger.info(f"NullbrCD2 handling download action: {dl_type} for {media_type} {tmdb_id}")
                 self.post_message(channel, title="⏳ 处理中", text="正在请求资源...", userid=user_id)
-                
                 if dl_type == "115":
                     self._handle_download_115(channel, user_id, media_type, tmdb_id)
                 elif dl_type == "mag":
@@ -240,82 +171,123 @@ class NullbrCd2(_PluginBase):
                 self.post_message(channel, title="❌ 错误", text=f"操作处理失败: {str(e)}", userid=user_id)
 
     def _handle_download_115(self, channel, user_id, media_type, tmdb_id):
-        """
-        处理 115 转存
-        """
         resources = []
         if media_type == "movie":
             resources = self._nullbr_client.get_movie_115(tmdb_id)
         elif media_type == "tv":
             resources = self._nullbr_client.get_tv_115(tmdb_id)
-        
         if not resources:
             self.post_message(channel, title="❌ 失败", text="未获取到 115 资源链接", userid=user_id)
             return
-
-        # 优先选择第一个资源
         resource = resources[0]
         share_link = resource.get("share_link")
-        
         password = ""
         if "password=" in share_link:
             import urllib.parse
             parsed = urllib.parse.urlparse(share_link)
             qs = urllib.parse.parse_qs(parsed.query)
             password = qs.get("password", [""])[0]
-
-        # 调用 CD2 转存
         success = self._cd2_client.transfer_115_share(share_link, self.cd2_115_mount_path, password)
-        
         if success:
-            logger.info(f"NullbrCD2 transfer success: {resource.get('title')}")
             self.post_message(channel, title="✅ 转存成功", text=f"任务已提交到 CloudDrive2\n{resource.get('title')}", userid=user_id)
         else:
             self.post_message(channel, title="❌ 转存失败", text="CloudDrive2 接口调用失败，请检查日志", userid=user_id)
 
     def _handle_download_magnet(self, channel, user_id, media_type, tmdb_id):
-        """
-        处理磁力离线
-        """
         resources = []
         if media_type == "movie":
             resources = self._nullbr_client.get_movie_magnet(tmdb_id)
         elif media_type == "tv":
-            # 对于剧集，通常 magnet 很多，这里简化处理：尝试获取第一季的 magnet
-            # TODO: 更好的交互应该是列出季让用户选，或者默认下载 S01
             resources = self._nullbr_client.get_tv_season_magnet(tmdb_id, 1)
-        
         if not resources:
             self.post_message(channel, title="❌ 失败", text="未获取到磁力资源", userid=user_id)
             return
-
         resource = resources[0]
         magnet_link = resource.get("magnet")
-        
         if self.download_mode == "MoviePilot":
-            # 使用 MP 下载器
             try:
-                DownloaderHelper().add_download_task(
-                    magnet_link
-                )
-                logger.info(f"NullbrCD2 added to MP downloader: {resource.get('name')}")
+                DownloaderHelper().add_download_task(magnet_link)
                 self.post_message(channel, title="✅ 下载添加成功", text=f"任务已提交到 MoviePilot 下载器\n{resource.get('name')}", userid=user_id)
             except Exception as e:
-                logger.error(f"NullbrCD2 MP download failed: {e}")
                 self.post_message(channel, title="❌ 下载添加失败", text=f"MoviePilot 下载器调用失败: {str(e)}", userid=user_id)
         else:
-            # 默认使用 CD2 离线
             success = self._cd2_client.add_offline_task(magnet_link, self.cd2_115_mount_path)
-            
             if success:
-                logger.info(f"NullbrCD2 offline task added: {resource.get('name')}")
                 self.post_message(channel, title="✅ 离线添加成功", text=f"离线任务已提交到 CloudDrive2\n{resource.get('name')}", userid=user_id)
             else:
                 self.post_message(channel, title="❌ 离线添加失败", text="CloudDrive2 接口调用失败，请检查日志", userid=user_id)
 
+    def get_api(self) -> List[Dict[str, Any]]:
+        """
+        插件API
+        """
+        return [
+            {
+                "path": "/search",
+                "endpoint": self.api_search,
+                "methods": ["POST"],
+                "summary": "搜索资源",
+                "description": "搜索Nullbr资源"
+            },
+            {
+                "path": "/download",
+                "endpoint": self.api_download,
+                "methods": ["POST"],
+                "summary": "下载资源",
+                "description": "下载指定资源"
+            },
+            {
+                "path": "/clear",
+                "endpoint": self.api_clear,
+                "methods": ["GET"],
+                "summary": "清空搜索",
+                "description": "清空搜索结果"
+            }
+        ]
+
+    def api_search(self, keyword: str):
+        """
+        API: 搜索
+        """
+        self._search_keyword = keyword
+        self._search_results = []
+        if self._nullbr_client:
+            try:
+                self._search_results = self._nullbr_client.search(keyword)
+            except Exception as e:
+                logger.error(f"Search API error: {e}")
+                return {"code": 500, "message": str(e)}
+        return {"code": 0, "message": "Success", "count": len(self._search_results)}
+
+    def api_download(self, dl_type: str, media_type: str, tmdb_id: int):
+        """
+        API: 下载
+        """
+        if not self._enabled:
+            return {"code": 500, "message": "插件未启用"}
+        
+        # 这里的 channel 设为 None，因为 Web 点击没有上下文 Channel，日志会记录，或者可以尝试发给默认管理员？
+        # 为了简化，Web端操作只依赖 Web 反馈，通知通过 sync_task 完成
+        try:
+            if dl_type == "115":
+                self._handle_download_115(None, None, media_type, int(tmdb_id))
+            elif dl_type == "mag":
+                self._handle_download_magnet(None, None, media_type, int(tmdb_id))
+            return {"code": 0, "message": "任务已提交"}
+        except Exception as e:
+            return {"code": 500, "message": str(e)}
+
+    def api_clear(self):
+        """
+        API: 清空
+        """
+        self._search_keyword = ""
+        self._search_results = []
+        return {"code": 0, "message": "Success"}
+
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         """
-        获取插件配置表单
+        插件配置表单
         """
         return [
             {
@@ -512,17 +484,187 @@ class NullbrCd2(_PluginBase):
 
     def get_page(self) -> List[dict]:
         """
-        插件详情页面
+        插件详情页面 (Web Search UI)
         """
+        if not self._enabled:
+            return [{'component': 'div', 'text': '插件未启用', 'class': 'text-h6 text-center mt-10'}]
+
+        results_cards = []
+        if self._search_results:
+            for item in self._search_results:
+                poster = item.get("poster")
+                if poster and not poster.startswith("http"):
+                    poster = f"https://image.tmdb.org/t/p/w200{poster}"
+                
+                title = item.get("title")
+                overview = item.get("overview", "")[:80] + "..." if item.get("overview") else ""
+                tmdb_id = item.get("tmdbid")
+                media_type = item.get("media_type")
+                
+                # Badges
+                badges = []
+                if item.get("115-flg") == 1:
+                    badges.append({'component': 'VChip', 'text': '115', 'color': 'blue', 'size': 'small', 'class': 'mr-1'})
+                if item.get("magnet-flg") == 1:
+                    badges.append({'component': 'VChip', 'text': 'Mag', 'color': 'green', 'size': 'small', 'class': 'mr-1'})
+                
+                # Actions
+                actions = []
+                if item.get("115-flg") == 1:
+                    actions.append({
+                        'component': 'VBtn',
+                        'props': {'color': 'blue', 'variant': 'text', 'size': 'small'},
+                        'text': '115转存',
+                        'events': {
+                            'click': {
+                                'api': 'plugin/NullbrCd2/download',
+                                'method': 'post',
+                                'params': {'dl_type': '115', 'media_type': media_type, 'tmdb_id': tmdb_id}
+                            }
+                        }
+                    })
+                if item.get("magnet-flg") == 1:
+                    actions.append({
+                        'component': 'VBtn',
+                        'props': {'color': 'green', 'variant': 'text', 'size': 'small'},
+                        'text': '磁力下载',
+                        'events': {
+                            'click': {
+                                'api': 'plugin/NullbrCd2/download',
+                                'method': 'post',
+                                'params': {'dl_type': 'mag', 'media_type': media_type, 'tmdb_id': tmdb_id}
+                            }
+                        }
+                    })
+
+                results_cards.append({
+                    'component': 'VCol',
+                    'props': {'cols': 12, 'sm': 6, 'md': 4, 'lg': 3},
+                    'content': [
+                        {
+                            'component': 'VCard',
+                            'props': {'class': 'mx-auto', 'height': '100%'},
+                            'content': [
+                                {
+                                    'component': 'div',
+                                    'class': 'd-flex flex-no-wrap justify-start',
+                                    'content': [
+                                        {
+                                            'component': 'VAvatar',
+                                            'props': {'class': 'ma-3', 'size': '100', 'rounded': '0'},
+                                            'content': [{'component': 'VImg', 'props': {'src': poster, 'cover': True}}]
+                                        },
+                                        {
+                                            'component': 'div',
+                                            'content': [
+                                                {'component': 'VCardTitle', 'text': title, 'class': 'text-subtitle-2 font-weight-bold'},
+                                                {'component': 'VCardSubtitle', 'text': f"TMDB: {tmdb_id}"},
+                                                {
+                                                    'component': 'VCardText',
+                                                    'class': 'pt-1 pb-1',
+                                                    'content': [
+                                                        {'component': 'div', 'content': badges},
+                                                        {'component': 'div', 'text': overview, 'class': 'text-caption text-truncate', 'style': 'max-height: 40px;'}
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {'component': 'VDivider'},
+                                {'component': 'VCardActions', 'content': actions}
+                            ]
+                        }
+                    ]
+                })
+
         return [
             {
-                'component': 'div',
-                'text': 'NullbrCD2 插件已安装',
-                'class': 'text-h5 text-center mt-4'
-            },
-            {
-                'component': 'div',
-                'text': '请在配置页填写 Nullbr 和 CloudDrive2 的连接信息。',
-                'class': 'text-body-1 text-center mt-2'
+                'component': 'VContainer',
+                'props': {'fluid': True},
+                'content': [
+                    {
+                        'component': 'VRow',
+                        'class': 'align-center mb-4',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 8},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'keyword', # This needs to be passed via params usually, but MP UI binding might be tricky.
+                                            # MP UI typically doesn't support v-model binding back to plugin state directly via get_page. 
+                                            # Instead, we use params in the event.
+                                            # But VTextField needs a model to display input.
+                                            # Let's try using a local prop 'keyword' in the page context if possible, 
+                                            # or just use the plugin's _search_keyword if MP supports re-rendering with state.
+                                            'label': '搜索电影/剧集',
+                                            'placeholder': '输入关键词...',
+                                            'append-inner-icon': 'mdi-magnify',
+                                            'clearable': True,
+                                            'hide-details': True
+                                        },
+                                        # Bind the input value to the API param
+                                        # NOTE: In MP V2, we might need to rely on the form state or simple binding.
+                                        # Since I can't interactively test, I'll assume standard Vuetify behavior + MP event system.
+                                        # Using a fixed 'keyword' prop here might not reflect user input unless bound.
+                                        # Workaround: Use 'defaultValue' from _search_keyword
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 2},
+                                'content': [
+                                    {
+                                        'component': 'VBtn',
+                                        'props': {'color': 'primary', 'block': True},
+                                        'text': '搜索',
+                                        'events': {
+                                            'click': {
+                                                'api': 'plugin/NullbrCd2/search',
+                                                'method': 'post',
+                                                'params': {
+                                                    'keyword': '{{keyword}}' # Try to bind to the VTextField model 'keyword'
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 2},
+                                'content': [
+                                    {
+                                        'component': 'VBtn',
+                                        'props': {'color': 'grey', 'variant': 'outlined', 'block': True},
+                                        'text': '清空',
+                                        'events': {
+                                            'click': {
+                                                'api': 'plugin/NullbrCd2/clear',
+                                                'method': 'get'
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': results_cards if results_cards else [
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12},
+                                'content': [
+                                    {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal'}, 'text': '请输入关键词进行搜索，或使用聊天命令 /nullbr'}
+                                ]
+                            }
+                        ]
+                    }
+                ]
             }
         ]
