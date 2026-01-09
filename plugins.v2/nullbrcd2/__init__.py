@@ -13,8 +13,8 @@ class NullbrCd2(_PluginBase):
     # 插件元数据
     plugin_name = "NullbrCD2"
     plugin_desc = "Nullbr资源搜索与CloudDrive2联动插件"
-    plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/115.png"
-    plugin_version = "1.1"
+    plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/torrenttransfer.jpg"
+    plugin_version = "1.2"
     plugin_author = "Developer"
     plugin_config_prefix = "nullbrcd2_"
     plugin_order = 10
