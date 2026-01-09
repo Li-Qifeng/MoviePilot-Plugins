@@ -1,15 +1,18 @@
 {
-  "nullbr_search_lite": {
-    "name": "Nullbr资源搜索 lite",
-    "description": "支持nullbr api接口直接搜索影视资源。支持115网盘、磁力、ed2k、m3u8等多种资源类型。",
-    "labels": "资源",
-    "version": "2.0.6",
-    "icon": "https://raw.githubusercontent.com/Hqyel/MoviePilot-Plugins/main/icons/nullbr.png",
-    "author": "Li",
+  "NullbrCd2": {
+    "name": "NullbrCD2",
+    "description": "Nullbr资源搜索与CloudDrive2联动插件，支持115转存与离线下载任务监控。",
+    "labels": [
+      "资源搜索",
+      "115",
+      "CloudDrive2"
+    ],
+    "version": "1.0",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/115.png",
+    "author": "Developer",
     "level": 1,
     "history": {
-      "v2.0.0": "重构整理代码。",
-      "v2.0.1": "搜索资源时清理上一次搜索的缓存"
+      "1.0": "初始版本发布，支持Nullbr搜索与CD2联动。"
     }
   }
 }
