@@ -8,8 +8,8 @@
       "CloudDrive2"
     ],
     "version": "1.0",
-    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/115.png",
-    "author": "Developer",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/torrenttransfer.jpg",
+    "author": "Li-Qifeng",
     "level": 1,
     "history": {
       "1.0": "初始版本发布，支持Nullbr搜索与CD2联动。"
