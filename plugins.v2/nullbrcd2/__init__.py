@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from apscheduler.triggers.cron import CronTrigger
 from app.plugins import _PluginBase
 from app.core.event import eventmanager, EventType, Event
-from app.helper.message import MessageChannel
+from app.schemas.types import MessageChannel
 from app.helper.downloader import DownloaderHelper
 from app.helper.notification import NotificationHelper
 from app.log import logger
