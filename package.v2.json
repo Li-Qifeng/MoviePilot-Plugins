@@ -3,11 +3,12 @@
     "name": "NullbrCD2",
     "description": "Nullbr资源搜索与CloudDrive2联动插件，支持115转存与离线下载任务监控。",
     "labels": "资源搜索,115,CloudDrive2",
-    "version": "1.0",
-    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/torrenttransfer.jpg",
-    "author": "Li-Qifeng",
+    "version": "1.1",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/115.png",
+    "author": "Developer",
     "level": 1,
     "history": {
+      "1.1": "增加配置页面，支持App ID和API Key设置；新增Web搜索界面。",
       "1.0": "初始版本发布，支持Nullbr搜索与CD2联动。"
     }
   }
